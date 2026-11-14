@@ -41,7 +41,7 @@ jobs:
             "platforms;android-33" \
             "build-tools;33.0.1" \
             "ndk;21.4.7075529" \
-            "cmake;3.10.2"
+            "cmake;3.10.2.4988404"
 
       - name: Setup ccache
         uses: hendrikmuhs/ccache-action@v1.2
