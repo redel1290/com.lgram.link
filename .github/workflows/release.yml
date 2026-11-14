@@ -1,0 +1,82 @@
+
+name: Build lgram APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build arm64-v8a Release
+    runs-on: ubuntu-22.04
+
+    env:
+      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_MAXSIZE: "5G"
+      CCACHE_HARDLINK: "true"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager \
+            "platforms;android-33" \
+            "build-tools;33.0.1" \
+            "ndk;21.4.7075529" \
+            "cmake;3.10.2"
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: lgram-arm64
+
+      - name: Create API_KEYS
+        env:
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+        run: |
+          : "${TELEGRAM_API_ID:?Missing TELEGRAM_API_ID secret}"
+          : "${TELEGRAM_API_HASH:?Missing TELEGRAM_API_HASH secret}"
+
+          {
+            printf 'APP_ID = %s\n' "$TELEGRAM_API_ID"
+            printf 'APP_HASH = "%s"\n' "$TELEGRAM_API_HASH"
+            printf 'MAPS_V2_API = 0\n'
+          } > API_KEYS
+
+      - name: Create Firebase configuration
+        env:
+          FIREBASE_CONFIG: ${{ secrets.GOOGLE_SERVICES_JSON_FILE_IN_BASE64 }}
+        run: |
+          : "${FIREBASE_CONFIG:?Missing Firebase configuration secret}"
+          printf '%s' "$FIREBASE_CONFIG" | base64 --decode \
+            > TMessagesProj/google-services.json
+
+      - name: Build arm64 Release APK
+        run: |
+          chmod +x gradlew
+          ./gradlew :TMessagesProj:assembleArm64Release \
+            --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: lgram-arm64-release
+          path: TMessagesProj/build/outputs/apk/arm64/release/*.apk
+          if-no-files-found: error
